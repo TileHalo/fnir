@@ -400,13 +400,15 @@ mod tests {
         let rule = DEQuad::new();
         // Test various integrals from 0 to 1
         let ints: &[fn(f64) -> f64] = &[
-            |x| x
+            |x| x,
+            |x| f64::exp(-(x.powi(2) + 2.0 * x + 1.0))
         ];
 
 
 
         let ress: &[f64] = &[
-            0.0
+            0.0,
+            f64::sqrt(std::f64::consts::PI),
         ];
 
         for (i1, res) in ints.iter().zip(ress.iter()) {
