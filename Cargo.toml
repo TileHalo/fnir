@@ -1,0 +1,18 @@
+[package]
+name = "fnir"
+version = "0.1.0"
+edition = "2021"
+authors = ["Leo Lahti leo.lahti1@gmail.com"]
+description = "Fast numerical integration rules, like tanh-sinh quadrature"
+
+license = "GPL-3.0"
+# Using latex in the docs to display formulas
+[package.metadata.docs.rs]
+rustdoc-args = [ "--html-in-header", "katex-header.html" ]
+
+[dependencies]
+num = "0.4.3"
+num-complex = "0.4.6"
+
+[dev-dependencies]
+assert_approx_eq = "1.1.0"
