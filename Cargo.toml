@@ -1,9 +1,10 @@
 [package]
 name = "fnir"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Leo Lahti leo.lahti1@gmail.com"]
 description = "Fast numerical integration rules, like tanh-sinh quadrature"
+repository = "https://github.com/TileHalo/fnir"
 
 license = "GPL-3.0"
 # Using latex in the docs to display formulas

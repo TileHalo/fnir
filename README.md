@@ -4,7 +4,7 @@ FNIR provides various numerical integration algorithms for use.
 ## Usage
 Add the following under `[dependencies]` in your cargo.toml
 ```toml
-fnir = 0.1.0
+fnir = 0.1.1
 ```
 
 To use for example the [Michalski-Mosig variant](http://dx.doi.org/10.1080/09205071.2015.1129915)
