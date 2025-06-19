@@ -11,6 +11,8 @@
 //! Finally, vector spaces and modules are present.
 use std::ops;
 
+pub mod polynomial;
+
 // Commuting lhs
 /// Commuting add is helper trait for type `U` which is the result of commutative addition with `T`.
 /// This type abstracts over when LHS is `T`

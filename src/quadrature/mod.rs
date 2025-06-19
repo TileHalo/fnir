@@ -2,9 +2,9 @@
 //! To use a (generic, non-existent) rule `Rule`, one must first call `Rule::new()`,
 //! and then either use `Rule::nint` or `Rule::integrate` depending if rule modifications are
 //! desired or not.
-use std::ops;
+use std::{f64::consts::PI, iter, ops};
 
-use crate::algebra as alg;
+use crate::algebra::{self as alg, polynomial};
 
 /// Trait that all quadrature rules implement. All quadratures blanket implement the (`Integral`)[`super::Integral`]
 /// trait
@@ -25,6 +25,15 @@ impl<Q: Quadrature<I, O>, I, O> super::Integral<I, O> for Q {
     }
 }
 
+/// Standard Gaussian quadrature for intervals [a, b], with q points.
+pub struct GaussQuadrature {
+    pub a: f64,
+    pub b: f64,
+    pub q: usize,
+    pub eta: Vec<f64>,
+    pub nu: Vec<f64>,
+}
+
 /// Standard trapezoidal rule for finite intervals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Trapezoidal(usize);
@@ -39,6 +48,90 @@ pub struct DEQuad {
     kappa: f64,
     maxlev: usize,
     eps: f64,
+}
+
+impl GaussQuadrature {
+    /// Build new Gauss-Legendre quadrature for interval [a, b] and size q
+    pub fn gausslegendre(a: f64, b: f64, q: usize) -> Self {
+        // let q = Q;
+        if q == 1 {
+            return Self {
+                a,
+                b,
+                q,
+                eta: vec![2.0],
+                nu: vec![0.0 + (a + b) / 2.0],
+            };
+        } else if q == 2 {
+            return Self {
+                a,
+                b,
+                q,
+                eta: vec![1.0, 1.0],
+                nu: vec![
+                    -(b - a) / 2.0 * 0.57735 + (a + b) / 2.0,
+                    (b - a) / 2.0 * 0.57735 + (a + b) / 2.0,
+                ],
+            };
+        }
+        let mut quad = Self {
+            a,
+            b,
+            q,
+            eta: vec![0.0; q],
+            nu: vec![0.0; q],
+        };
+
+        let n = q as f64;
+
+        let lg = polynomial::generate_legendre(q);
+
+        // TODO: Make this use the pre-calculated list
+        let (pn, pn1) = (&lg[q], &lg[q - 1]);
+
+        let tol = 1.0e-15;
+        for (i, (w, x)) in quad.eta.iter_mut().zip(quad.nu.iter_mut()).enumerate() {
+            let mut theta = PI * ((n - i as f64) / n) - 0.25;
+            let mut xi = f64::cos(theta);
+            let mut err = 2.0 * tol;
+            while err >= tol {
+                // Find Legendre polynomials for current guess
+                let prev = f64::cos(theta);
+                theta -= f64::sin(theta) * pn.eval(xi) / (n * xi * pn.eval(xi) - n * pn1.eval(xi));
+                err = f64::abs(f64::cos(theta) - prev);
+                xi = f64::cos(theta);
+            }
+            *x = (b - a) * 0.5 * xi + (b + a) * 0.5;
+            *w = 2.0 * f64::sin(theta).powi(2) / (n * xi * pn.eval(xi) - n * pn1.eval(xi)).powi(2);
+        }
+        quad
+    }
+}
+
+impl<
+        O: Copy + ops::Mul<f64, Output = O> + ops::Mul<I, Output = O> + iter::Sum,
+        I: Copy + ops::Add<I, Output = I> + ops::Sub<I, Output = I> + ops::Mul<f64, Output = I>,
+    > Quadrature<I, O> for GaussQuadrature
+{
+    const DEFAULTN: usize = 24;
+    fn nint<F>(&self, func: F, start: Option<I>, end: Option<I>, _: usize) -> crate::Result<O>
+    where
+        F: Fn(I) -> O,
+    {
+        match (start, end) {
+            (Some(a), Some(b)) => {
+                let gq: O = self
+                    .eta
+                    .iter()
+                    .zip(self.nu.iter())
+                    .map(|(&eta, &nu): (&f64, &f64)| func((b - a) * 0.5 * eta + (a + b) * 0.5) * nu)
+                    .sum();
+                Ok(gq * ((b - a) * 0.5))
+            }
+            (None, None) => Err(crate::IntegrationError::InfiniteIntegral),
+            _ => Err(crate::IntegrationError::SemiInfiniteIntegral),
+        }
+    }
 }
 
 impl<
@@ -190,13 +283,15 @@ impl DEQuad {
                 let r = I::exp(t - 0.25 / t);
                 let w = r;
                 let (x1, x2) = (c + d / r, c + d * r);
-                if x1 == c { break; }
+                if x1 == c {
+                    break;
+                }
                 let (y1, y2) = (func(x1), func(x2));
                 if y1.is_finite() {
                     q += y1 * (1.0 / w);
                 }
                 if y2.is_finite() {
-                    q += y2 *  w;
+                    q += y2 * w;
                 }
                 q *= t + 0.25 / t;
                 p += q;
@@ -302,7 +397,7 @@ where
             (Some(a), Some(b)) => self.tanhsinh(func, a, b, nmax),
             (Some(a), None) => self.expsinh(func, a, nmax),
             (None, Some(a)) => Ok(-self.expsinh(func, a, nmax)?),
-            (None, None) => self.sinhsinh(func, nmax)
+            (None, None) => self.sinhsinh(func, nmax),
         }
     }
 }
@@ -330,11 +425,9 @@ mod tests {
             |x| 1.0 / f64::sqrt(-f64::log10(x)),
         ];
 
-        let cints: &[fn(f64) -> f64] = &[
-            |x| 4.0 / (1.0 + x * x),
-        ];
+        let cints: &[fn(f64) -> f64] = &[|x| 4.0 / (1.0 + x * x)];
 
-        let resc: &[f64] = &[2.0*f64::atan(33.0/56.0)];
+        let resc: &[f64] = &[2.0 * f64::atan(33.0 / 56.0)];
 
         let ress: &[f64] = &[
             f64::ln(2.0),
@@ -363,18 +456,15 @@ mod tests {
         let rule = DEQuad::new();
         // Test various integrals from 0 to 1
         let ints: &[fn(f64) -> f64] = &[
-            |x| 1.0/(1.0 + x*x),
-            |x| f64::exp(-x)/f64::sqrt(x),
-            |x| f64::exp(-1.0-x)/(1.0 + x),
-            |x| (x*x)*f64::exp(-4.0*x),
-            |x| f64::powi(f64::sqrt((x*x) + 9.0) - x, 3),
-            |x| f64::exp(-3.0*x),
+            |x| 1.0 / (1.0 + x * x),
+            |x| f64::exp(-x) / f64::sqrt(x),
+            |x| f64::exp(-1.0 - x) / (1.0 + x),
+            |x| (x * x) * f64::exp(-4.0 * x),
+            |x| f64::powi(f64::sqrt((x * x) + 9.0) - x, 3),
+            |x| f64::exp(-3.0 * x),
         ];
 
-        let cints: &[fn(f64) -> f64] = &[
-            |x| f64::exp(-x)/x,
-        ];
-
+        let cints: &[fn(f64) -> f64] = &[|x| f64::exp(-x) / x];
 
         let ress: &[f64] = &[
             std::f64::consts::FRAC_PI_2,
@@ -399,22 +489,17 @@ mod tests {
     fn sinhsinh_test() {
         let rule = DEQuad::new();
         // Test various integrals from 0 to 1
-        let ints: &[fn(f64) -> f64] = &[
-            |x| x,
-            |x| f64::exp(-(x.powi(2) + 2.0 * x + 1.0))
-        ];
+        let ints: &[fn(f64) -> f64] = &[|x| x, |x| f64::exp(-(x.powi(2) + 2.0 * x + 1.0))];
 
-
-
-        let ress: &[f64] = &[
-            0.0,
-            f64::sqrt(std::f64::consts::PI),
-        ];
+        let ress: &[f64] = &[0.0, f64::sqrt(std::f64::consts::PI)];
 
         for (i1, res) in ints.iter().zip(ress.iter()) {
             let ans = rule.nint(i1, None, None, 24).ok().unwrap();
             assert_approx_eq!(ans, res);
         }
+    }
 
+    #[test]
+    fn gausslegendre_test() {
     }
 }

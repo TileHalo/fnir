@@ -12,6 +12,7 @@ license = "GPL-3.0"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
+itertools = "0.14.0"
 num = "0.4.3"
 num-complex = "0.4.6"
 
