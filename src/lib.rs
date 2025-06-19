@@ -4,6 +4,7 @@ use std::fmt;
 
 pub mod algebra;
 pub mod quadrature;
+pub mod geom;
 
 pub trait Integral<I, O> {
 

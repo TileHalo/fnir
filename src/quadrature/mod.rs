@@ -5,6 +5,7 @@
 use std::{f64::consts::PI, iter, ops};
 
 use crate::algebra::{self as alg, polynomial};
+pub mod qubature;
 
 /// Trait that all quadrature rules implement. All quadratures blanket implement the (`Integral`)[`super::Integral`]
 /// trait
