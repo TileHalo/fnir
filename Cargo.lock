@@ -28,6 +28,7 @@ dependencies = [
  "itertools",
  "num",
  "num-complex",
+ "num-traits",
 ]
 
 [[package]]

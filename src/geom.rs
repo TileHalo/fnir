@@ -1,7 +1,10 @@
-//! THis is where all geometry primitives live
+//! This is where all geometry primitives live
 
-use std::ops;
+use num::Complex;
 
+use std::{iter, ops};
+
+/// An basic geometry shape/cell.
 pub trait GeomCell<const N: usize, const M: usize> {
     type REFT;
     /// Reference cell
@@ -16,66 +19,140 @@ pub trait GeomCell<const N: usize, const M: usize> {
     // fn map_reference_arb(self, p: Point<N>, rf: Self) -> Point<M>;
 }
 
+/// Basic (slow) vector type. Should not be used anywhere outside simple vector arithmetic in
+/// low dimensions (i.e. cross product etc.)
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Point<const D: usize>([f64; D]);
+pub struct Vector<T, const D: usize>([T; D]);
+pub type Point<const D: usize> = Vector<f64, D>;
 pub type Triangle<const D: usize> = (Point<D>, Point<D>, Point<D>);
 
-const REFERENCE_TRIANGLE: Triangle<2> = (Point([0.0, 0.0]), Point([1.0, 0.0]), Point([0.0, 1.0]));
+const REFERENCE_TRIANGLE: Triangle<2> = (
+    Vector::<f64, 2>([0.0, 0.0]),
+    Vector::<f64, 2>([1.0, 0.0]),
+    Vector::<f64, 2>([0.0, 1.0]),
+);
 
-
-impl<const D: usize> Point<D> {
-    pub fn new(a: [f64; D]) -> Self {
-        Point(a)
+impl<T, const D: usize> Vector<T, D> {
+    pub fn new(a: [T; D]) -> Self {
+        Vector(a)
     }
 }
 
-impl <const D: usize> ops::Index<usize> for Point<D> {
-    type Output = f64;
-
-    fn index(&self, idx: usize) -> &f64 {
-        &self.0[idx]
+impl<T, const D: usize> ops::Index<usize> for Vector<T, D> {
+    type Output = T;
+    fn index(&self, i: usize) -> &Self::Output {
+        &self.0[i]
     }
 }
 
-impl <P: ops::Mul<f64, Output=f64> + Copy, const D: usize> ops::Mul<P> for Point<D> {
-    type Output = Point<D>;
+impl<T, const D: usize> ops::IndexMut<usize> for Vector<T, D> {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+        &mut self.0[i]
+    }
+}
 
-    fn mul(self, rhs: P) -> Self::Output {
-        let mut p = Point([0.0; D]);
+impl<T: Copy + ops::Add<K>, K: Copy, const D: usize> ops::Add<Vector<K, D>> for Vector<T, D> {
+    type Output = Vector<<T as ops::Add<K>>::Output, D>;
+    fn add(self, rhs: Vector<K, D>) -> Self::Output {
+        Vector(std::array::from_fn(|i| self[i] + rhs[i]))
+    }
+}
 
+// Vector<T> - Vector<K>
+impl<T: Copy + ops::Sub<K>, K: Copy, const D: usize> ops::Sub<Vector<K, D>> for Vector<T, D> {
+    type Output = Vector<<T as ops::Sub<K>>::Output, D>;
+    fn sub(self, rhs: Vector<K, D>) -> Self::Output {
+        Vector(std::array::from_fn(|i| self[i] - rhs[i]))
+    }
+}
+
+// Vector<T> * Scalar<K>
+impl<T: Copy + ops::Mul<K>, K: Copy, const D: usize> ops::Mul<K> for Vector<T, D> {
+    type Output = Vector<<T as ops::Mul<K>>::Output, D>;
+    fn mul(self, rhs: K) -> Self::Output {
+        Vector(std::array::from_fn(|i| self[i] * rhs))
+    }
+}
+
+// Vector<T> / Scalar<K>
+impl<T: Copy + ops::Div<K>, K: Copy, const D: usize> ops::Div<K> for Vector<T, D> {
+    type Output = Vector<<T as ops::Div<K>>::Output, D>;
+    fn div(self, rhs: K) -> Self::Output {
+        Vector(std::array::from_fn(|i| self[i] / rhs))
+    }
+}
+
+// Assign: +=
+impl<T: ops::AddAssign<K> + Copy, K: Copy, const D: usize> ops::AddAssign<Vector<K, D>>
+    for Vector<T, D>
+{
+    fn add_assign(&mut self, rhs: Vector<K, D>) {
         for i in 0..D {
-            p.0[i] = rhs*self.0[i];
+            self[i] += rhs[i];
         }
-        p
     }
 }
 
-impl <const D: usize> ops::Sub<Point<D>> for Point<D> {
-    type Output = Point<D>;
-
-    fn sub(self, rhs: Point<D>) -> Self::Output {
-        let mut p = Point([0.0; D]);
-
+// Assign: -=
+impl<T: ops::SubAssign<K> + Copy, K: Copy, const D: usize> ops::SubAssign<Vector<K, D>>
+    for Vector<T, D>
+{
+    fn sub_assign(&mut self, rhs: Vector<K, D>) {
         for i in 0..D {
-            p.0[i] =  self.0[i] - rhs.0[i];
+            self[i] -= rhs[i];
         }
-        p
     }
 }
 
-impl <const D: usize> ops::Add<Point<D>> for Point<D> {
-    type Output = Point<D>;
+// ========== Dot + Norm ==========
 
-    fn add(self, rhs: Point<D>) -> Self::Output {
-        let mut p = Point([0.0; D]);
+// Real dot
+impl<T: num_complex::ComplexFloat + num_traits::NumAssign + Copy + iter::Sum, const D: usize>
+    Vector<T, D>
+{
+    pub fn dot(&self, rhs: &Vector<T, D>) -> T {
+        self.0.iter().zip(rhs.0.iter()).map(|(a, b)| *a * *b).sum()
+    }
 
+    pub fn norm(&self) -> T {
+        self.dot(self).sqrt()
+    }
+}
+
+// Complex dot
+impl<T: num::Float + num_traits::FloatConst + num_traits::NumAssign, const D: usize>
+    Vector<Complex<T>, D>
+{
+    pub fn conj(self) -> Vector<Complex<T>, D> {
+        let mut v = Vector([<Complex<T> as num::Zero>::zero(); D]);
         for i in 0..D {
-            p.0[i] = rhs.0[i] + self.0[i];
+            v.0[i] = self.0[i].conj()
         }
-        p
+        v
+    }
+    pub fn cdot(&self, rhs: &Self) -> Complex<T> {
+        self.conj().dot(rhs)
+    }
+
+    pub fn cnorm(&self) -> T {
+        self.cdot(self).norm_sqr().sqrt()
     }
 }
 
+// ========== Cross ==========
+
+impl<T> Vector<T, 3>
+where
+    T: num::Float,
+{
+    pub fn cross(&self, rhs: &Self) -> Self {
+        Vector([
+            self[1] * rhs[2] - self[2] * rhs[1],
+            self[2] * rhs[0] - self[0] * rhs[2],
+            self[0] * rhs[1] - self[1] * rhs[0],
+        ])
+    }
+}
 
 impl<const D: usize> GeomCell<2, D> for Triangle<D> {
     /// Reference cell
@@ -91,11 +168,11 @@ impl<const D: usize> GeomCell<2, D> for Triangle<D> {
             2 => 0.0,
             3 => 0.0,
             _ => panic!("Please use feature nönnönnöö"), // This should be translated into macro
-            // tomfoolery
+                                                         // tomfoolery
         }
     }
     /// Map to reference cell
     fn map_reference(self, p: Point<2>) -> Point<D> {
-        self.0 + (self.1 - self.0)*p[0] + (self.1 - self.0)*p[1]
+        self.0 + (self.1 - self.0) * p[0] + (self.1 - self.0) * p[1]
     }
 }

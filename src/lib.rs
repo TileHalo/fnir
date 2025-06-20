@@ -3,12 +3,14 @@
 use std::fmt;
 
 pub mod algebra;
-pub mod quadrature;
 pub mod geom;
+pub mod quadrature;
+
 
 pub trait Integral<I, O> {
-
-    fn integrate<F>(&self, func: F, a: Option<I>, b: Option<I>) -> Result<O> where F: Fn(I) -> O;
+    fn integrate<F>(&self, func: F, a: Option<I>, b: Option<I>) -> Result<O>
+    where
+        F: Fn(I) -> O;
 }
 
 /// Internal result type
